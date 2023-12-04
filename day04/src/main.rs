@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 #[derive(Debug)]
 pub struct Card {
     id: i32,
@@ -46,9 +48,24 @@ fn parse_card(input: &str) -> Card {
     }
 }
 
+fn points_for_card(card: &Card) -> i32 {
+    let intersection_count = card
+        .own_numbers
+        .iter()
+        .filter(|n| card.winning_numbers.contains(n))
+        .count();
+
+    match intersection_count {
+        0 => 0,
+        n => 1 << (n - 1),
+    }
+}
+
 fn main() {
     let input = include_str!("../input.txt");
     let cards = parse_input(input);
+    let total_points = cards.map(|card| points_for_card(&card)).sum::<i32>();
+    println!("{}", total_points);
 }
 
 #[cfg(test)]
