@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 #[derive(Debug)]
 pub struct Card {
     id: i32,
@@ -48,24 +46,42 @@ fn parse_card(input: &str) -> Card {
     }
 }
 
-fn points_for_card(card: &Card) -> i32 {
-    let intersection_count = card
-        .own_numbers
+fn matching_numbers_count(card: &Card) -> usize {
+    card.own_numbers
         .iter()
         .filter(|n| card.winning_numbers.contains(n))
-        .count();
+        .count()
+}
 
-    match intersection_count {
+fn points_for_matching_numbers(count: usize) -> i32 {
+    match count {
         0 => 0,
         n => 1 << (n - 1),
     }
 }
 
+fn process_and_count_cards(cards: impl Iterator<Item = Card>) -> usize {
+    // (Card, Number of copies)
+    let mut card_vec = cards.map(|c| (c, 1)).collect::<Vec<(Card, usize)>>();
+
+    for i in 0..card_vec.len() {
+        let (left, right) = card_vec.split_at_mut(i + 1);
+        let (card, copies) = &left[i];
+
+        (0..matching_numbers_count(card)).for_each(|j| {
+            right[j].1 += copies;
+        });
+    }
+
+    card_vec.iter().map(|(_, copies)| copies).sum::<usize>()
+}
+
 fn main() {
     let input = include_str!("../input.txt");
     let cards = parse_input(input);
-    let total_points = cards.map(|card| points_for_card(&card)).sum::<i32>();
-    println!("{}", total_points);
+    let total_cards = process_and_count_cards(cards);
+
+    println!("{}", total_cards);
 }
 
 #[cfg(test)]
