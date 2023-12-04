@@ -60,19 +60,36 @@ fn parse_set(input: &str) -> Set {
     }
 }
 
+fn minimum_cubes_required(game: &Game) -> Set {
+    let (min_reds, min_greens, min_blues) =
+        game.sets
+            .iter()
+            .fold((0, 0, 0), |(min_reds, min_greens, min_blues), set| {
+                (
+                    min_reds.max(set.reds),
+                    min_greens.max(set.greens),
+                    min_blues.max(set.blues),
+                )
+            });
+
+    Set {
+        reds: min_reds,
+        greens: min_greens,
+        blues: min_blues,
+    }
+}
+
 fn main() {
     let input = include_str!("../input.txt");
     let games = parse_input(input);
 
-    let first_star_predicate = |game: &&Game| {
-        game.sets
-            .iter()
-            .all(|set| set.reds <= 12 && set.greens <= 13 && set.blues <= 14)
-    };
+    let minimum_cubes = games.iter().map(minimum_cubes_required);
 
-    let valid_games = games.iter().filter(first_star_predicate);
-    let valid_games_ids_summed = valid_games.map(|game| game.id).sum::<i32>();
-    println!("{}", valid_games_ids_summed);
+    let sum_of_powers_of_minimum_cubes = minimum_cubes
+        .map(|set| set.reds * set.greens * set.blues)
+        .sum::<i32>();
+
+    println!("{}", sum_of_powers_of_minimum_cubes);
 }
 
 #[cfg(test)]
