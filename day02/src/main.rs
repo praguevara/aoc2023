@@ -63,6 +63,16 @@ fn parse_set(input: &str) -> Set {
 fn main() {
     let input = include_str!("../input.txt");
     let games = parse_input(input);
+
+    let first_star_predicate = |game: &&Game| {
+        game.sets
+            .iter()
+            .all(|set| set.reds <= 12 && set.greens <= 13 && set.blues <= 14)
+    };
+
+    let valid_games = games.iter().filter(first_star_predicate);
+    let valid_games_ids_summed = valid_games.map(|game| game.id).sum::<i32>();
+    println!("{}", valid_games_ids_summed);
 }
 
 #[cfg(test)]
