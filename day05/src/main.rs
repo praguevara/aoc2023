@@ -1,6 +1,6 @@
 #[derive(Debug)]
 struct Input<'a> {
-    seeds: Vec<i64>,
+    seeds: Vec<SeedRange>,
     maps: Vec<Map<'a>>,
 }
 
@@ -17,6 +17,16 @@ impl Map<'_> {
             .find_map(|r| r.convert(value))
             .unwrap_or(value)
     }
+
+    fn unmap(&self, value: i64) -> i64 {
+        let unmapped = self
+            .ranges
+            .iter()
+            .find_map(move |r| r.unconvert(value))
+            .unwrap();
+
+        unmapped
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -27,12 +37,38 @@ struct Range {
 }
 
 impl Range {
-    fn convert(&self, value: i64) -> Option<i64> {
-        let is_contained_in_range = self.source_range_start <= value
-            && value < self.source_range_start + self.range_length as i64;
+    fn is_contained_in_source_range(&self, value: i64) -> bool {
+        self.source_range_start <= value
+            && value < self.source_range_start + self.range_length as i64
+    }
 
-        is_contained_in_range
+    fn convert(&self, value: i64) -> Option<i64> {
+        self.is_contained_in_source_range(value)
             .then_some(self.destination_range_start + (value - self.source_range_start))
+    }
+
+    fn unconvert(&self, value: i64) -> Option<i64> {
+        let is_contained_in_destination_range = self.destination_range_start <= value
+            && value < self.destination_range_start + self.range_length as i64;
+
+        is_contained_in_destination_range
+            .then_some(self.source_range_start + (value - self.destination_range_start))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct SeedRange {
+    start: i64,
+    length: usize,
+}
+
+impl SeedRange {
+    fn iter(&self) -> impl Iterator<Item = i64> {
+        self.start..self.start + self.length as i64
+    }
+
+    fn contains(&self, value: i64) -> bool {
+        self.start <= value && value < self.start + self.length as i64
     }
 }
 
@@ -54,7 +90,7 @@ fn parse_input(input: &str) -> Input {
         parts.0.into_iter()
     };
 
-    let seeds = parts
+    let seeds: Vec<SeedRange> = parts
         .next()
         .unwrap()
         .first()
@@ -63,8 +99,18 @@ fn parse_input(input: &str) -> Input {
         .nth(1)
         .unwrap()
         .split_whitespace()
-        .map(|s| s.parse::<i64>().unwrap())
-        .collect::<Vec<_>>();
+        .fold((vec![], None), |(mut acc, start), s| match start {
+            None => (acc, Some(s.parse::<i64>().unwrap())),
+            Some(start) => {
+                let size = s.parse::<usize>().unwrap();
+                acc.push(SeedRange {
+                    start,
+                    length: size,
+                });
+                (acc, None)
+            }
+        })
+        .0;
 
     let maps = parts
         .map(|ls| {
@@ -92,19 +138,41 @@ fn parse_input(input: &str) -> Input {
     Input { seeds, maps }
 }
 
-fn lowest_location(input: &Input) -> i64 {
+fn lowest_location_bf(input: &Input) -> i64 {
     input
         .seeds
         .iter()
-        .map(|&s| input.maps.iter().fold(s, |acc, m| m.map(acc)))
+        .flat_map(|s| s.iter())
+        .map(|s| input.maps.iter().fold(s, |acc, m| m.map(acc)))
         .min()
+        .unwrap()
+}
+
+fn lowest_location_backwards(input: &Input) -> i64 {
+    let maps_in_reverse = input.maps.iter().rev().collect::<Vec<_>>();
+
+    (0..)
+        .flat_map(|location| {
+            let mut current_value = location;
+
+            for map in maps_in_reverse.iter() {
+                current_value = map.unmap(current_value);
+            }
+
+            if input.seeds.iter().any(|s| s.contains(current_value)) {
+                Some(location)
+            } else {
+                None
+            }
+        })
+        .next()
         .unwrap()
 }
 
 fn main() {
     let input_str = include_str!("../input.txt");
     let input = parse_input(input_str);
-    println!("{}", lowest_location(&input));
+    println!("{}", lowest_location_backwards(&input));
 }
 
 #[cfg(test)]
@@ -112,10 +180,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_input() {
+    fn test_parse_input_2() {
         let input_str = include_str!("../sample.txt");
         let input = parse_input(input_str);
-        assert_eq!(input.seeds, vec![79, 14, 55, 13]);
+        assert_eq!(
+            input.seeds,
+            vec![
+                SeedRange {
+                    start: 79,
+                    length: 14
+                },
+                SeedRange {
+                    start: 55,
+                    length: 13
+                }
+            ]
+        );
         assert_eq!(input.maps.len(), 7);
         assert_eq!(input.maps[0].name, "seed-to-soil map");
         assert_eq!(input.maps[0].ranges.len(), 2);
@@ -168,5 +248,47 @@ mod tests {
         assert_eq!(map.map(99), 51);
         assert_eq!(map.map(53), 55);
         assert_eq!(map.map(10), 10);
+    }
+
+    #[test]
+    fn test_lowest_location_bf() {
+        let input_str = include_str!("../sample.txt");
+        let input = parse_input(input_str);
+        assert_eq!(lowest_location_bf(&input), 46);
+    }
+
+    #[test]
+    fn test_unmap() {
+        let map = Map {
+            name: "seed-to-soil map",
+            ranges: vec![
+                Range {
+                    destination_range_start: 50,
+                    source_range_start: 98,
+                    range_length: 2,
+                },
+                Range {
+                    destination_range_start: 52,
+                    source_range_start: 50,
+                    range_length: 48,
+                },
+            ],
+        };
+
+        assert_eq!(map.unmap(81), 79);
+        assert_eq!(map.unmap(14), 14);
+        assert_eq!(map.unmap(57), 55);
+        assert_eq!(map.unmap(13), 13);
+        assert_eq!(map.unmap(50), 98);
+        assert_eq!(map.unmap(51), 99);
+        assert_eq!(map.unmap(55), 53);
+        assert_eq!(map.unmap(10), 10);
+    }
+
+    #[test]
+    fn test_lowest_location_backwards() {
+        let input_str = include_str!("../sample.txt");
+        let input = parse_input(input_str);
+        assert_eq!(lowest_location_backwards(&input), 46);
     }
 }
