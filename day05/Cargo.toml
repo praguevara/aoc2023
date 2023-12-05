@@ -6,3 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+criterion = "0.5.1"
+
+[lib]
+name = "day05"
+path = "src/lib.rs"
+
+[[bin]]
+name = "day05bin"
+path = "src/main.rs"
+
+[[bench]]
+name = "benchmark"
+harness = false
