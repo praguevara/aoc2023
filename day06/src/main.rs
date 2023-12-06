@@ -74,7 +74,21 @@ fn ways_to_beat_record(race: &Race) -> impl Iterator<Item = i64> + '_ {
             )
         })
         .filter(|(_, new_distance)| *new_distance > race.record_distance)
-        .map(|(held_button_time, _)| held_button_time)
+        .map(|(held_button_time, _)| (held_button_time))
+}
+
+fn ways_to_beat_record_math(race: &Race) -> std::ops::Range<i64> {
+    // distance = speed * (time - speed)
+
+    // Solving for speed
+    let first_term = race.time as f64 / 2.0;
+    let second_term = f64::sqrt((race.time * race.time - 4 * race.record_distance) as f64) / 2.0;
+
+    // We take ceiling and floor since we only care about those speeds that beat the record
+    let speed_l = f64::floor(first_term - second_term) as i64;
+    let speed_r = f64::ceil(first_term + second_term) as i64;
+
+    speed_l + 1..speed_r
 }
 
 fn total_ways_to_beat_record_product(races: impl IntoIterator<Item = Race>) -> i64 {
@@ -87,7 +101,7 @@ fn total_ways_to_beat_record_product(races: impl IntoIterator<Item = Race>) -> i
 fn main() {
     let input = include_str!("../input.txt");
     let race = parse_input_second_part(input);
-    println!("{}", ways_to_beat_record(&race).count());
+    println!("{}", ways_to_beat_record_math(&race).count());
 }
 
 #[cfg(test)]
@@ -115,6 +129,14 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_second_part_math() {
+        let input = sample_input();
+        let race = parse_input_second_part(input);
+        let ways_count = ways_to_beat_record_math(&race).count();
+        assert_eq!(ways_count, 71503);
+    }
+
+    #[test]
     fn test_compute_race_time() {
         let race_time = 7;
         assert_eq!(compute_race_distance(race_time, 0), 0);
@@ -132,5 +154,42 @@ mod tests {
         let race = Race::new(7, 9);
         let ways = ways_to_beat_record(&race).collect::<Vec<_>>();
         assert_eq!(ways, vec![2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_ways_to_beat_record_math() {
+        let race = Race::new(7, 9);
+        let ways = ways_to_beat_record_math(&race).collect::<Vec<_>>();
+        assert_eq!(ways, vec![2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_total_ways_to_beat_record() {
+        let race = Race::new(7, 9);
+        let ways_count = ways_to_beat_record_math(&race).count();
+        assert_eq!(ways_count, 4);
+    }
+
+    #[test]
+    fn test_total_ways_to_beat_record_2() {
+        let race = Race::new(71530, 940200);
+        let ways_count = ways_to_beat_record_math(&race).count();
+        assert_eq!(ways_count, 71503);
+    }
+
+    #[test]
+    fn test_math() {
+        // [0, 1, 2, 3, 4] -> [0, 3, 4, 3, 0]
+        let r0 = Race::new(4, 0); // Can be beaten by [1, 2, 3] -> 3
+        let r1 = Race::new(4, 1); // Can be beaten by [1, 2, 3] -> 3
+        let r2 = Race::new(4, 2); // Can be beaten by [1, 2, 3] -> 3
+        let r3 = Race::new(4, 3); // Can be beaten by [2] -> 1
+        let r4 = Race::new(4, 4); // Can be beaten by [] -> 0
+        let ways = [r0, r1, r2, r3, r4]
+            .iter()
+            .map(ways_to_beat_record_math)
+            .map(Iterator::count)
+            .collect::<Vec<_>>();
+        assert_eq!(ways, vec![3, 3, 3, 1, 0]);
     }
 }
