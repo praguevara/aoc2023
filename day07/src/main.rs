@@ -3,9 +3,9 @@ mod hand {
 
     #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
     pub enum Card {
+        J,
         N(u8),
         T,
-        J,
         Q,
         K,
         A,
@@ -50,21 +50,27 @@ mod hand {
 
         fn hand_type(&self) -> Type {
             let mut card_counts: HashMap<Card, usize> = HashMap::new();
+            let mut jokers = 0;
             for card in self.cards.iter() {
-                *card_counts.entry(*card).or_default() += 1;
+                if *card == Card::J {
+                    jokers += 1;
+                } else {
+                    *card_counts.entry(*card).or_default() += 1;
+                }
             }
 
             match card_counts.len() {
+                0 => Type::FiveOfAKind, // all jokers
                 1 => Type::FiveOfAKind,
                 2 => {
-                    if card_counts.values().any(|&count| count == 4) {
+                    if card_counts.values().any(|&count| count + jokers >= 4) {
                         Type::FourOfAKind
                     } else {
                         Type::FullHouse
                     }
                 }
                 3 => {
-                    if card_counts.values().any(|&count| count == 3) {
+                    if card_counts.values().any(|&count| count + jokers >= 3) {
                         Type::ThreeOfAKind
                     } else {
                         Type::TwoPair
@@ -122,6 +128,30 @@ mod hand {
             Ok(Self::new(cards))
         }
     }
+
+    #[test]
+    fn test_ordering() {
+        assert!(Hand::try_from("JKKK2").unwrap() < Hand::try_from("QJJQ2").unwrap());
+
+        assert_eq!(Hand::try_from("32T3K").unwrap().hand_type(), Type::OnePair);
+        assert_eq!(Hand::try_from("KK677").unwrap().hand_type(), Type::TwoPair);
+        assert_eq!(
+            Hand::try_from("T55J5").unwrap().hand_type(),
+            Type::FourOfAKind
+        );
+        assert_eq!(
+            Hand::try_from("KTJJT").unwrap().hand_type(),
+            Type::FourOfAKind
+        );
+        assert_eq!(
+            Hand::try_from("QQQJA").unwrap().hand_type(),
+            Type::FourOfAKind
+        );
+        assert_eq!(
+            Hand::try_from("KTJJT").unwrap().hand_type(),
+            Type::FourOfAKind
+        );
+    }
 }
 
 fn parse_input(input: &str) -> Vec<(hand::Hand, i32)> {
@@ -156,7 +186,6 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::hand::*;
     use super::*;
 
     fn sample_input() -> &'static str {
@@ -164,24 +193,9 @@ mod tests {
     }
 
     #[test]
-    fn test_ordering() {
-        assert!(Hand::try_from("AAAAA").unwrap() > Hand::try_from("AA8AA").unwrap());
-        assert!(Hand::try_from("AA8AA").unwrap() > Hand::try_from("23332").unwrap());
-        assert!(Hand::try_from("23332").unwrap() > Hand::try_from("TTT98").unwrap());
-        assert!(Hand::try_from("TTT98").unwrap() > Hand::try_from("23432").unwrap());
-        assert!(Hand::try_from("23432").unwrap() > Hand::try_from("A23A4").unwrap());
-        assert!(Hand::try_from("A23A4").unwrap() > Hand::try_from("23456").unwrap());
-
-        assert!(Hand::try_from("33332").unwrap() > Hand::try_from("2AAAA").unwrap());
-        assert!(Hand::try_from("77888").unwrap() > Hand::try_from("77788").unwrap());
-
-        assert!(Hand::try_from("QQQJA").unwrap() > Hand::try_from("T55J5").unwrap());
-    }
-
-    #[test]
     fn test_parsing() {
         let input = sample_input();
-        let parsed = parse_input(input);
+        parse_input(input);
     }
 
     #[test]
@@ -189,6 +203,6 @@ mod tests {
         let input = sample_input();
         let hands_and_bets = parse_input(input);
         let winnings = total_winnings(hands_and_bets);
-        assert_eq!(winnings, 6440);
+        assert_eq!(winnings, 5905);
     }
 }
