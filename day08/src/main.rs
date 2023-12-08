@@ -1,4 +1,3 @@
-use core::panic;
 use regex::Regex;
 use std::collections::HashMap;
 
@@ -81,10 +80,40 @@ fn steps_to_reach_zzz(map: &Map) -> usize {
     steps
 }
 
+fn steps_to_end_at_xxz(map: &Map, node_name: &str) -> usize {
+    let mut steps = 0;
+    let mut current_node = &map.nodes[node_name];
+    let cycled_directions = map.directions.iter().cycle();
+    for next_direction in cycled_directions {
+        current_node = &map.nodes[match next_direction {
+            Direction::Left => current_node.left,
+            Direction::Right => current_node.right,
+        }];
+
+        steps += 1;
+
+        if current_node.name.as_bytes()[2] == b'Z' {
+            return steps;
+        }
+    }
+    unreachable!()
+}
+
+fn steps_to_reach_all_xxz(map: &Map) -> usize {
+    map.nodes
+        .iter()
+        .filter(|n| n.0.as_bytes()[2] == b'A')
+        .map(|(_, v)| v)
+        .map(|node| steps_to_end_at_xxz(map, node.name))
+        .reduce(num::integer::lcm)
+        .unwrap()
+}
+
 fn main() {
     let input = include_str!("../input.txt");
     let map = Map::try_from(input).unwrap();
-    let steps = steps_to_reach_zzz(&map);
+    // let steps = steps_to_reach_zzz(&map);
+    let steps = steps_to_reach_all_xxz(&map);
     println!("{}", steps);
 }
 
@@ -100,10 +129,13 @@ mod tests {
         include_str!("../sample2.txt")
     }
 
+    fn sample3() -> &'static str {
+        include_str!("../sample3.txt")
+    }
+
     #[test]
-    fn test_parse2() {
-        let input = sample();
-        let map = Map::try_from(input).unwrap();
+    fn test_parse() {
+        let map: Map = sample().try_into().unwrap();
         assert_eq!(map.directions.len(), 2);
         assert_eq!(map.nodes.len(), 7);
 
@@ -113,14 +145,19 @@ mod tests {
 
     #[test]
     fn test_num_steps() {
-        let input_1 = sample();
-        let map_1 = Map::try_from(input_1).unwrap();
+        let map_1 = sample().try_into().unwrap();
         let steps_1 = steps_to_reach_zzz(&map_1);
         assert_eq!(steps_1, 2);
 
-        let input_2 = sample2();
-        let map2 = Map::try_from(input_2).unwrap();
+        let map2 = sample2().try_into().unwrap();
         let steps_2 = steps_to_reach_zzz(&map2);
         assert_eq!(steps_2, 6);
+    }
+
+    #[test]
+    fn test_num_steps_all_xxz() {
+        let map = sample3().try_into().unwrap();
+        let steps = steps_to_reach_all_xxz(&map);
+        assert_eq!(steps, 6);
     }
 }
