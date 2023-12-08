@@ -1,10 +1,23 @@
-use regex::Regex;
 use std::collections::HashMap;
+
+use nom::{
+    bytes::complete::{tag, take},
+    character::complete::{char, line_ending},
+    combinator::map,
+    sequence::terminated,
+    IResult,
+};
 
 #[derive(Debug, Clone, Copy)]
 enum Direction {
     Left,
     Right,
+}
+
+fn parse_direction(input: &str) -> IResult<&str, Direction> {
+    let parse_left = map(char('L'), |_| Direction::Left);
+    let parse_right = map(char('R'), |_| Direction::Right);
+    nom::branch::alt((parse_left, parse_right))(input)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,45 +27,34 @@ struct Node<'a> {
     right: &'a str,
 }
 
+fn parse_node(input: &str) -> IResult<&str, Node> {
+    let (input, name) = take(3usize)(input)?;
+    let (input, _) = tag(" = (")(input)?;
+    let (input, left) = take(3usize)(input)?;
+    let (input, _) = tag(", ")(input)?;
+    let (input, right) = take(3usize)(input)?;
+    let (input, _) = tag(")")(input)?;
+
+    Ok((input, Node { name, left, right }))
+}
+
 #[derive(Debug)]
 struct Map<'a> {
-    directions: &'a [Direction],
+    directions: Vec<Direction>,
     nodes: HashMap<&'a str, Node<'a>>,
 }
 
 impl<'a> TryFrom<&'a str> for Map<'a> {
-    type Error = ();
+    type Error = nom::Err<nom::error::Error<&'a str>>;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        let mut lines = value.lines();
+        let (input, directions) = nom::multi::many1(parse_direction)(value)?;
+        let (input, _) = nom::multi::count(line_ending, 2)(input)?;
+        let (_, nodes) = nom::multi::many1(terminated(parse_node, line_ending))(input)?;
 
-        let directions: &[_] = lines
-            .next()
-            .unwrap()
-            .chars()
-            .map(|c| match c {
-                'L' => Direction::Left,
-                'R' => Direction::Right,
-                _ => panic!(),
-            })
-            .collect::<Vec<_>>()
-            .leak();
-
-        let lines = lines.skip(1);
-        let re = Regex::new(r"(\w\w\w) = \((\w\w\w), (\w\w\w)\)").unwrap();
-
-        let nodes = lines
-            .map(|line| {
-                let caps = re.captures(line).unwrap();
-                (
-                    caps.get(1).unwrap().as_str(),
-                    Node {
-                        name: caps.get(1).unwrap().as_str(),
-                        left: caps.get(2).unwrap().as_str(),
-                        right: caps.get(3).unwrap().as_str(),
-                    },
-                )
-            })
+        let nodes = nodes
+            .into_iter()
+            .map(|node| (node.name, node))
             .collect::<HashMap<_, _>>();
 
         Ok(Map { directions, nodes })
