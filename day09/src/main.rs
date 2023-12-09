@@ -11,28 +11,20 @@ fn reduce_sequence_to_zeros(sequence: &[i32]) -> Vec<Vec<i32>> {
     let mut sequences = vec![current_sequence.clone()];
 
     while !is_sequence_all_zeros(&current_sequence) {
-        current_sequence = sequence_differences(&current_sequence)
-            .collect::<Vec<i32>>()
-            .clone();
+        current_sequence = sequence_differences(&current_sequence).collect::<Vec<i32>>();
         sequences.push(current_sequence.clone());
     }
     sequences
 }
 
-fn extrapolate_sequence(sequence: &[i32]) -> i32 {
+fn extrapolate_sequence(sequence: &[i32]) -> (i32, i32) {
+    let mut previous_value = 0;
     let mut next_value = 0;
     for seq in reduce_sequence_to_zeros(sequence).iter().rev() {
+        previous_value = seq.first().unwrap() - previous_value;
         next_value += seq.last().unwrap();
     }
-    next_value
-}
-
-fn extrapolate_sequence_backwards(sequence: &[i32]) -> i32 {
-    let mut previous_value = 0;
-    for seq in reduce_sequence_to_zeros(sequence).iter().rev() {
-        previous_value = seq.first().unwrap() - previous_value;
-    }
-    previous_value
+    (previous_value, next_value)
 }
 
 fn main() {
@@ -46,15 +38,11 @@ fn main() {
         })
         .collect::<Vec<Vec<i32>>>();
 
-    let sum_of_extrapolations = input_sequences
+    let (sum_of_extrapolations_backwards, sum_of_extrapolations) = input_sequences
         .iter()
         .map(|sequence| extrapolate_sequence(sequence))
-        .sum::<i32>();
-
-    let sum_of_extrapolations_backwards = input_sequences
-        .iter()
-        .map(|sequence| extrapolate_sequence_backwards(sequence))
-        .sum::<i32>();
+        .reduce(|a, b| (a.0 + b.0, a.1 + b.1))
+        .unwrap();
 
     println!("{}", sum_of_extrapolations);
     println!("{}", sum_of_extrapolations_backwards);
@@ -70,11 +58,11 @@ fn test_sequence_differences() {
 #[test]
 fn test_next_element_in_sequence() {
     let sequence = [0, 3, 6, 9, 12, 15];
-    assert_eq!(extrapolate_sequence(&sequence), 18);
+    assert_eq!(extrapolate_sequence(&sequence).1, 18);
 }
 
 #[test]
 fn test_previous_element_in_sequence() {
     let sequence = [10, 13, 16, 21, 30, 45];
-    assert_eq!(extrapolate_sequence_backwards(&sequence), 5);
+    assert_eq!(extrapolate_sequence(&sequence).0, 5);
 }
