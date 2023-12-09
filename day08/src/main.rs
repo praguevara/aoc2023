@@ -114,9 +114,10 @@ fn steps_to_reach_all_xxz(map: &Map) -> usize {
 fn main() {
     let input = include_str!("../input.txt");
     let map = Map::try_from(input).unwrap();
-    // let steps = steps_to_reach_zzz(&map);
-    let steps = steps_to_reach_all_xxz(&map);
-    println!("{}", steps);
+    let steps = steps_to_reach_zzz(&map);
+    let steps_all = steps_to_reach_all_xxz(&map);
+    println!("Part 1: {}", steps);
+    println!("Part 2: {}", steps_all);
 }
 
 #[cfg(test)]
