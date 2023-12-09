@@ -27,6 +27,14 @@ fn extrapolate_sequence(sequence: &[i32]) -> i32 {
     next_value
 }
 
+fn extrapolate_sequence_backwards(sequence: &[i32]) -> i32 {
+    let mut previous_value = 0;
+    for seq in reduce_sequence_to_zeros(sequence).iter().rev() {
+        previous_value = seq.first().unwrap() - previous_value;
+    }
+    previous_value
+}
+
 fn main() {
     let input = include_str!("../input.txt");
     let input_sequences = input
@@ -43,18 +51,30 @@ fn main() {
         .map(|sequence| extrapolate_sequence(sequence))
         .sum::<i32>();
 
+    let sum_of_extrapolations_backwards = input_sequences
+        .iter()
+        .map(|sequence| extrapolate_sequence_backwards(sequence))
+        .sum::<i32>();
+
     println!("{}", sum_of_extrapolations);
+    println!("{}", sum_of_extrapolations_backwards);
 }
 
 #[test]
 fn test_sequence_differences() {
-    let sequence = vec![0, 3, 6, 9, 12, 15];
+    let sequence = [0, 3, 6, 9, 12, 15];
     let reduced = reduce_sequence_to_zeros(&sequence);
     assert_eq!(&reduced.last(), &Some(&vec![0, 0, 0, 0]));
 }
 
 #[test]
 fn test_next_element_in_sequence() {
-    let sequence = vec![0, 3, 6, 9, 12, 15];
+    let sequence = [0, 3, 6, 9, 12, 15];
     assert_eq!(extrapolate_sequence(&sequence), 18);
+}
+
+#[test]
+fn test_previous_element_in_sequence() {
+    let sequence = [10, 13, 16, 21, 30, 45];
+    assert_eq!(extrapolate_sequence_backwards(&sequence), 5);
 }
