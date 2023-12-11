@@ -1,10 +1,10 @@
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeMap;
 
 type Coord = (usize, usize); // down, right
 
 #[derive(Debug)]
 struct Space {
-    galaxies: HashSet<Coord>,
+    galaxies: Vec<Coord>,
 }
 
 impl Space {
@@ -18,57 +18,60 @@ impl Space {
 }
 
 fn parse_input(input: &str, expansion_rate: usize) -> Space {
-    let mut galaxies: HashSet<Coord> = HashSet::new();
+    let mut galaxies: Vec<Coord> = Vec::new();
     for (y, line) in input.lines().enumerate() {
         for (x, c) in line.chars().enumerate() {
             if c == '#' {
-                galaxies.insert((y, x));
+                galaxies.push((y, x));
             }
         }
     }
 
-    // rows
-    let mut galaxies_expanded_rows = HashSet::new();
+    // expand rows
+    let mut galaxies_expanded_rows = Vec::new();
     let mut expanded_rows = 0;
-    let occuppied_rows = galaxies.iter().map(|(y, _)| *y).collect::<BTreeSet<_>>();
 
-    let row_galaxies_1 = galaxies
-        .iter()
-        .filter(|(y, _)| y == occuppied_rows.iter().next().unwrap())
-        .collect::<Vec<_>>();
-    for (y, x) in row_galaxies_1 {
-        galaxies_expanded_rows.insert((*y + expanded_rows, *x));
+    let galaxies_by_row: BTreeMap<usize, Vec<Coord>> =
+        galaxies.iter().fold(BTreeMap::new(), |mut acc, (y, x)| {
+            acc.entry(*y).or_default().push((*y, *x));
+            acc
+        });
+
+    // first row isn't expanded
+    for (y, x) in galaxies_by_row.values().next().unwrap() {
+        galaxies_expanded_rows.push((*y, *x));
     }
 
-    for (l_row, r_row) in occuppied_rows.iter().zip(occuppied_rows.iter().skip(1)) {
+    for (l_row, (r_row, r_galaxies)) in galaxies_by_row.keys().zip(galaxies_by_row.iter().skip(1)) {
         let new_rows = (expansion_rate - 1) * (r_row - l_row - 1);
         expanded_rows += new_rows;
-        for (y, x) in galaxies.iter().filter(|(y, _)| y == r_row) {
-            galaxies_expanded_rows.insert((*y + expanded_rows, *x));
+        for (y, x) in r_galaxies {
+            galaxies_expanded_rows.push((*y + expanded_rows, *x));
         }
     }
 
-    // columns
-    let mut galaxies_expanded = HashSet::new();
+    // expand columns
+    let mut galaxies_expanded = Vec::new();
     let mut expanded_cols = 0;
-    let occupied_cols = galaxies_expanded_rows
-        .iter()
-        .map(|(_, x)| *x)
-        .collect::<BTreeSet<_>>();
 
-    let col_galaxies_1 = galaxies_expanded_rows
-        .iter()
-        .filter(|(_, x)| x == occupied_cols.iter().next().unwrap())
-        .collect::<Vec<_>>();
-    for (y, x) in col_galaxies_1 {
-        galaxies_expanded.insert((*y, *x + expanded_cols));
+    let galaxies_by_col: BTreeMap<usize, Vec<Coord>> =
+        galaxies_expanded_rows
+            .iter()
+            .fold(BTreeMap::new(), |mut acc, (y, x)| {
+                acc.entry(*x).or_default().push((*y, *x));
+                acc
+            });
+
+    // first column isn't expanded
+    for (y, x) in galaxies_by_col.values().next().unwrap() {
+        galaxies_expanded.push((*y, *x + expanded_cols));
     }
 
-    for (l_col, r_col) in occupied_cols.iter().zip(occupied_cols.iter().skip(1)) {
+    for (l_col, (r_col, r_galaxies)) in galaxies_by_col.keys().zip(galaxies_by_col.iter().skip(1)) {
         let new_cols = (expansion_rate - 1) * (r_col - l_col - 1);
         expanded_cols += new_cols;
-        for (y, x) in galaxies_expanded_rows.iter().filter(|(_, x)| x == r_col) {
-            galaxies_expanded.insert((*y, *x + expanded_cols));
+        for (y, x) in r_galaxies {
+            galaxies_expanded.push((*y, *x + expanded_cols));
         }
     }
 
@@ -93,21 +96,21 @@ fn compute_total_distance(space: &Space) -> usize {
 
 fn main() {
     let input = include_str!("../input.txt");
-    let space = parse_input(input, 2);
+    let expansion_rate = 2;
+    let space = parse_input(input, expansion_rate);
     let total_distance = compute_total_distance(&space);
-    println!("Total distance: {}", total_distance);
+    println!("Total distance: {total_distance} with expansion rate = {expansion_rate}");
 
-    let space = parse_input(input, 1_000_000);
+    let expansion_rate = 1_000_000;
+    let space = parse_input(input, expansion_rate);
     let total_distance = compute_total_distance(&space);
-    println!("Total distance: {}", total_distance);
+    println!("Total distance: {total_distance} with expansion rate = {expansion_rate}");
 }
 
 #[test]
 fn test_distance() {
     let input = include_str!("../sample.txt");
     let space = parse_input(input, 2);
-
-    dbg!(&space.galaxies.iter().collect::<BTreeSet<_>>());
 
     let from_galaxy = (0, 4);
     let to_galaxy = (10, 9);
