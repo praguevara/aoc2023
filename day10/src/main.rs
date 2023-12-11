@@ -163,27 +163,19 @@ fn compute_edges(map: &Map, coord: Coord) -> Vec<Coord> {
         Tile::Start => {
             [
                 match northern {
-                    Some((Tile::NorthSouth, _) | (Tile::SouthWest, _) | (Tile::SouthEast, _)) => {
-                        northern
-                    }
+                    Some((Tile::NorthSouth | Tile::SouthWest | Tile::SouthEast, _)) => northern,
                     _ => None,
                 },
                 match southern {
-                    Some((Tile::NorthSouth, _) | (Tile::NorthWest, _) | (Tile::NorthEast, _)) => {
-                        southern
-                    }
+                    Some((Tile::NorthSouth | Tile::NorthWest | Tile::NorthEast, _)) => southern,
                     _ => None,
                 },
                 match eastern {
-                    Some((Tile::EastWest, _) | (Tile::NorthWest, _) | (Tile::SouthWest, _)) => {
-                        eastern
-                    }
+                    Some((Tile::EastWest | Tile::NorthWest | Tile::SouthWest, _)) => eastern,
                     _ => None,
                 },
                 match western {
-                    Some((Tile::EastWest, _) | (Tile::NorthEast, _) | (Tile::SouthEast, _)) => {
-                        western
-                    }
+                    Some((Tile::EastWest | Tile::NorthEast | Tile::SouthEast, _)) => western,
                     _ => None,
                 },
             ]
@@ -209,14 +201,13 @@ fn compute_adjacency_matrix(map: &Map) -> Vec<Vec<Vec<Coord>>> {
     adjacency_matrix
 }
 
-fn compute_longest_distance(map: &Map) -> usize {
-    let adjacency_matrix = compute_adjacency_matrix(map);
+fn compute_longest_distance(map: &Map, adjacency_matrix: &[Vec<Vec<Coord>>]) -> usize {
     let start = map.find_start().unwrap();
     let mut visited_distances: HashMap<Coord, usize> = HashMap::from([(start, 0)]);
 
     let mut queue: VecDeque<(Coord, usize)> = VecDeque::from([(start, 0)]);
     while let Some((coord, distance)) = queue.pop_front() {
-        for edge in adjacency_matrix[coord.0 as usize][coord.1 as usize].iter() {
+        for edge in &adjacency_matrix[coord.0 as usize][coord.1 as usize] {
             if !visited_distances.contains_key(edge) {
                 visited_distances.insert(*edge, distance + 1);
                 queue.push_back((*edge, distance + 1));
@@ -227,11 +218,66 @@ fn compute_longest_distance(map: &Map) -> usize {
     *visited_distances.values().max().unwrap()
 }
 
+type MainLoop = HashMap<Coord, i32>;
+
+fn compute_main_loop(map: &Map, adjacency_matrix: &[Vec<Vec<Coord>>]) -> MainLoop {
+    let start = map.find_start().unwrap();
+
+    let mut main_loop = vec![start];
+    let mut next_node = &adjacency_matrix[start.0 as usize][start.1 as usize][0];
+    while *next_node != start {
+        main_loop.push(*next_node);
+        let current_node = next_node;
+        let previous_node = main_loop[main_loop.len() - 2];
+        next_node = adjacency_matrix[current_node.0 as usize][current_node.1 as usize]
+            .iter()
+            .find(|&&node| node != previous_node)
+            .unwrap();
+    }
+
+    let mut main_loop_map = HashMap::new();
+
+    // Compute direction (+1 if south, -1 if north)
+    for i in 0..main_loop.len() {
+        let previous_node = main_loop[(i + main_loop.len() - 1) % main_loop.len()];
+        let current_node = main_loop[i];
+        let next_node = main_loop[(i + 1) % main_loop.len()];
+
+        let direction = next_node.0 - previous_node.0;
+
+        main_loop_map.insert(current_node, direction);
+    }
+
+    main_loop_map
+}
+
+fn compute_tiles_contained_by_main_loop(map: &Map, main_loop: &MainLoop) -> Vec<Coord> {
+    let mut tiles_contained_by_main_loop = vec![];
+
+    for y in 0..map.height {
+        let mut crosses = 0;
+        for x in 0..map.width {
+            if let Some(dy) = main_loop.get(&Coord(y as i32, x as i32)).copied() {
+                crosses += dy;
+            } else if crosses != 0 {
+                tiles_contained_by_main_loop.push(Coord(y as i32, x as i32));
+            }
+        }
+    }
+
+    tiles_contained_by_main_loop
+}
+
 fn main() {
     let input = include_str!("../input.txt");
     let map = parse_input(input).unwrap();
-    let longest_distance = compute_longest_distance(&map);
-    println!("{}", longest_distance);
+    let adjacency_matrix = compute_adjacency_matrix(&map);
+    let longest_distance = compute_longest_distance(&map, &adjacency_matrix);
+    println!("{longest_distance}");
+
+    let main_loop = compute_main_loop(&map, &adjacency_matrix);
+    let tiles_contained_by_main_loop = compute_tiles_contained_by_main_loop(&map, &main_loop);
+    println!("{:?}", tiles_contained_by_main_loop.len());
 }
 
 #[cfg(test)]
@@ -249,14 +295,14 @@ mod tests {
         assert_eq!(
             adjacency_matrix[1][1]
                 .iter()
-                .cloned()
+                .copied()
                 .collect::<HashSet<_>>(),
             HashSet::from([Coord(1, 2), Coord(2, 1)])
         );
         assert_eq!(
             adjacency_matrix[1][3]
                 .iter()
-                .cloned()
+                .copied()
                 .collect::<HashSet<_>>(),
             HashSet::from([Coord(1, 2), Coord(2, 3)])
         );
@@ -266,7 +312,82 @@ mod tests {
     fn test_compute_longest_distance() {
         let input = "..F7.\r\n.FJ|.\r\nSJ.L7\r\n|F--J\r\nLJ...\r\n";
         let map = parse_input(input).unwrap();
-        let longest_distance = compute_longest_distance(&map);
+        let adjacency_matrix = compute_adjacency_matrix(&map);
+        let longest_distance = compute_longest_distance(&map, &adjacency_matrix);
         assert_eq!(longest_distance, 8);
+    }
+
+    #[test]
+    fn test_compute_main_loop() {
+        let input = ".....\r\n\
+        .S-7.\r\n\
+        .|.|.\r\n\
+        .L-J.\r\n\
+        .....\r\n";
+        let map = parse_input(input).unwrap();
+        let adjacency_matrix = compute_adjacency_matrix(&map);
+        let main_loop = compute_main_loop(&map, &adjacency_matrix);
+
+        assert_eq!(main_loop.len(), 8);
+    }
+
+    #[test]
+    fn test_compute_tiles_contained_by_main_loop() {
+        let input = "FF7FSF7F7F7F7F7F---7\r\n\
+        L|LJ||||||||||||F--J\r\n\
+        FL-7LJLJ||||||LJL-77\r\n\
+        F--JF--7||LJLJ7F7FJ-\r\n\
+        L---JF-JLJ.||-FJLJJ7\r\n\
+        |F|F-JF---7F7-L7L|7|\r\n\
+        |FFJF7L7F-JF7|JL---7\r\n\
+        7-L-JL7||F7|L7F-7F7|\r\n\
+        L.L7LFJ|||||FJL7||LJ\r\n\
+        L7JLJL-JLJLJL--JLJ.L\r\n";
+        let map = parse_input(input).unwrap();
+        let adjacency_matrix = compute_adjacency_matrix(&map);
+        let main_loop = compute_main_loop(&map, &adjacency_matrix);
+        let tiles_contained_by_main_loop = compute_tiles_contained_by_main_loop(&map, &main_loop);
+
+        assert_eq!(tiles_contained_by_main_loop.len(), 10);
+    }
+
+    #[test]
+    fn test_compute_tiles_contained_by_main_loop_2() {
+        let input = ".F----7F7F7F7F-7....\r\n\
+        .|F--7||||||||FJ....\r\n\
+        .||.FJ||||||||L7....\r\n\
+        FJL7L7LJLJ||LJ.L-7..\r\n\
+        L--J.L7...LJS7F-7L7.\r\n\
+        ....F-J..F7FJ|L7L7L7\r\n\
+        ....L7.F7||L7|.L7L7|\r\n\
+        .....|FJLJ|FJ|F7|.LJ\r\n\
+        ....FJL-7.||.||||...\r\n\
+        ....L---J.LJ.LJLJ...\r\n";
+        let map = parse_input(input).unwrap();
+        let adjacency_matrix = compute_adjacency_matrix(&map);
+        let main_loop = compute_main_loop(&map, &adjacency_matrix);
+        let tiles_contained_by_main_loop = compute_tiles_contained_by_main_loop(&map, &main_loop);
+
+        assert_eq!(tiles_contained_by_main_loop.len(), 8);
+    }
+
+    #[test]
+    fn test_compute_tiles_contained_by_main_loop_3() {
+        let input = "FF7FSF7F7F7F7F7F---7\r\n\
+        L|LJ||||||||||||F--J\r\n\
+        FL-7LJLJ||||||LJL-77\r\n\
+        F--JF--7||LJLJ7F7FJ-\r\n\
+        L---JF-JLJ.||-FJLJJ7\r\n\
+        |F|F-JF---7F7-L7L|7|\r\n\
+        |FFJF7L7F-JF7|JL---7\r\n\
+        7-L-JL7||F7|L7F-7F7|\r\n\
+        L.L7LFJ|||||FJL7||LJ\r\n\
+        L7JLJL-JLJLJL--JLJ.L\r\n";
+        let map = parse_input(input).unwrap();
+        let adjacency_matrix = compute_adjacency_matrix(&map);
+        let main_loop = compute_main_loop(&map, &adjacency_matrix);
+        let tiles_contained_by_main_loop = compute_tiles_contained_by_main_loop(&map, &main_loop);
+
+        assert_eq!(tiles_contained_by_main_loop.len(), 10);
     }
 }
