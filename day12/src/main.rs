@@ -1,4 +1,7 @@
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#![feature(iter_intersperse)]
+use std::collections::HashMap;
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 enum Spring {
     Working,
     Broken,
@@ -57,7 +60,10 @@ fn parse_input(input: &str) -> Vec<Row> {
         .collect()
 }
 
+type Cache = HashMap<(Vec<Spring>, Option<usize>, Vec<usize>), usize>;
+
 fn explore_row(
+    cache: &mut Cache,
     springs: &[Spring],
     current_group: Option<usize>,
     remaining_continuous: &[usize],
@@ -75,36 +81,64 @@ fn explore_row(
         return 0;
     }
 
-    match (springs[0], current_group) {
+    if let Some(ans) = cache.get(&(
+        springs.to_vec(),
+        current_group,
+        remaining_continuous.to_vec(),
+    )) {
+        return *ans;
+    }
+
+    let ans = match (springs[0], current_group) {
         (Spring::Broken, Some(x)) if x != remaining_continuous[0] => 0,
-        (Spring::Broken, Some(_)) => explore_row(&springs[1..], None, &remaining_continuous[1..]),
-        (Spring::Broken, None) => explore_row(&springs[1..], None, remaining_continuous),
+        (Spring::Broken, Some(_)) => {
+            explore_row(cache, &springs[1..], None, &remaining_continuous[1..])
+        }
+        (Spring::Broken, None) => explore_row(cache, &springs[1..], None, remaining_continuous),
         (Spring::Working, Some(_)) => explore_row(
+            cache,
             &springs[1..],
             current_group.map(|x| x + 1),
             remaining_continuous,
         ),
-        (Spring::Working, None) => explore_row(&springs[1..], Some(1), remaining_continuous),
+        (Spring::Working, None) => explore_row(cache, &springs[1..], Some(1), remaining_continuous),
         (Spring::Unknown, Some(x)) => {
             let mut ans = explore_row(
+                cache,
                 &springs[1..],
                 current_group.map(|x| x + 1),
                 remaining_continuous,
             );
             if x == remaining_continuous[0] {
-                ans += explore_row(&springs[1..], None, &remaining_continuous[1..])
+                ans += explore_row(cache, &springs[1..], None, &remaining_continuous[1..])
             }
             ans
         }
         (Spring::Unknown, None) => {
-            explore_row(&springs[1..], Some(1), remaining_continuous)
-                + explore_row(&springs[1..], None, remaining_continuous)
+            explore_row(cache, &springs[1..], Some(1), remaining_continuous)
+                + explore_row(cache, &springs[1..], None, remaining_continuous)
         }
-    }
+    };
+
+    cache.insert(
+        (
+            springs.to_vec(),
+            current_group,
+            remaining_continuous.to_vec(),
+        ),
+        ans,
+    );
+
+    ans
 }
 
 fn possible_arrangements(row: &Row) -> usize {
-    explore_row(&row.springs, None, &row.contiguous_working_springs)
+    explore_row(
+        &mut HashMap::new(),
+        &row.springs,
+        None,
+        &row.contiguous_working_springs,
+    )
 }
 
 fn main() {
@@ -116,16 +150,23 @@ fn main() {
 
     // part 2
     let rows = rows
-        .into_iter()
-        .map(|mut row| {
-            let springs = row.springs.repeat(5);
+        .iter()
+        .map(|row| {
+            let springs = (0..5)
+                .map(|_| row.springs.clone())
+                .intersperse(vec![Spring::Unknown])
+                .flatten()
+                .collect();
+
             let contiguous_working_springs = row.contiguous_working_springs.repeat(5);
+
             Row {
                 springs,
                 contiguous_working_springs,
             }
         })
         .collect::<Vec<_>>();
+
     let arrangements = rows.iter().map(possible_arrangements).sum::<usize>();
 
     println!("{:?}", arrangements);
