@@ -1,22 +1,23 @@
+use std::ops::BitXor;
+
 use nom::{
     branch::alt,
     character::{complete::char, complete::line_ending},
     combinator::map,
-    multi::{many1, separated_list0, separated_list1},
+    multi::{many1, separated_list1},
     sequence::terminated,
     IResult,
 };
 
 use ndarray::prelude::*;
 
-type Pattern = Array2<bool>;
+type Pattern = Array2<u8>;
 fn parse_pattern(input: &str) -> IResult<&str, Pattern> {
     let (input, pattern_vec) = many1(terminated(
-        many1(alt((map(char('.'), |_| false), map(char('#'), |_| true)))),
+        many1(alt((map(char('.'), |_| 0), map(char('#'), |_| 1)))),
         line_ending,
     ))(input)?;
 
-    // Convert Vec<Vec<bool>> to Array2<bool>
     let rows = pattern_vec.len();
     let cols = if rows > 0 { pattern_vec[0].len() } else { 0 };
     let pattern = Array2::from_shape_fn((rows, cols), |(i, j)| pattern_vec[i][j]);
@@ -38,24 +39,18 @@ fn test_parse_input() {
 }
 
 fn vertical_reflection_errors(pattern: &Pattern, reflects_after: usize) -> usize {
-    let mut errors = 0;
     let max_reflection_len = usize::min(reflects_after + 1, pattern.ncols() - 1 - reflects_after);
 
-    for i in 0..max_reflection_len {
-        let left_idx = reflects_after - i;
-        let right_idx = reflects_after + i + 1;
+    let left_cols = pattern.slice(s![
+        ..,
+        reflects_after + 1 - max_reflection_len..reflects_after + 1
+    ]);
+    let right_cols_mirrored = pattern.slice(s![
+        ..,
+        reflects_after + 1..reflects_after + 1 + max_reflection_len
+    ; -1]);
 
-        for (a, b) in pattern
-            .column(left_idx)
-            .iter()
-            .zip(pattern.column(right_idx).iter())
-        {
-            if a != b {
-                errors += 1;
-            }
-        }
-    }
-    errors
+    left_cols.bitxor(&right_cols_mirrored).sum() as usize
 }
 
 fn find_vertical_reflection(pattern: &Pattern, errors: usize) -> Option<usize> {
@@ -65,26 +60,18 @@ fn find_vertical_reflection(pattern: &Pattern, errors: usize) -> Option<usize> {
 }
 
 fn horizontal_reflection_errors(pattern: &Pattern, reflects_after: usize) -> usize {
-    debug_assert!(reflects_after < pattern.nrows() - 1);
-
-    let mut errors = 0;
     let max_reflection_len = usize::min(reflects_after + 1, pattern.nrows() - 1 - reflects_after);
 
-    for i in 0..max_reflection_len {
-        let top_idx = reflects_after - i;
-        let bottom_idx = reflects_after + i + 1;
+    let top_rows = pattern.slice(s![
+        reflects_after + 1 - max_reflection_len..reflects_after + 1,
+        ..
+    ]);
+    let bottom_rows_mirrored = pattern.slice(s![
+        reflects_after + 1..reflects_after + 1 + max_reflection_len ; -1,
+        ..
+    ]);
 
-        for (a, b) in pattern
-            .row(top_idx)
-            .iter()
-            .zip(pattern.row(bottom_idx).iter())
-        {
-            if a != b {
-                errors += 1;
-            }
-        }
-    }
-    errors
+    top_rows.bitxor(&bottom_rows_mirrored).sum() as usize
 }
 
 fn find_horizontal_reflection(pattern: &Pattern, errors: usize) -> Option<usize> {
