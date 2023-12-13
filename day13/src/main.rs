@@ -37,20 +37,22 @@ fn test_parse_input() {
     assert_eq!(patterns.len(), 2);
 }
 
-fn vertical_reflection_errors(pattern_line: &Array1<bool>, reflects_after: usize) -> usize {
-    debug_assert!(reflects_after < pattern_line.len() - 1);
-
+fn vertical_reflection_errors(pattern: &Pattern, reflects_after: usize) -> usize {
     let mut errors = 0;
-    let max_reflection_len =
-        usize::min(reflects_after + 1, pattern_line.len() - 1 - reflects_after);
+    let max_reflection_len = usize::min(reflects_after + 1, pattern.ncols() - 1 - reflects_after);
 
     for i in 0..max_reflection_len {
         let left_idx = reflects_after - i;
         let right_idx = reflects_after + i + 1;
 
-        let (left, right) = (pattern_line[left_idx], pattern_line[right_idx]);
-        if left != right {
-            errors += 1;
+        for (a, b) in pattern
+            .column(left_idx)
+            .iter()
+            .zip(pattern.column(right_idx).iter())
+        {
+            if a != b {
+                errors += 1;
+            }
         }
     }
     errors
@@ -58,13 +60,7 @@ fn vertical_reflection_errors(pattern_line: &Array1<bool>, reflects_after: usize
 
 fn find_vertical_reflection(pattern: &Pattern, errors: usize) -> Option<usize> {
     (0..pattern.ncols() - 1)
-        .find(|&i| {
-            pattern
-                .axis_iter(Axis(0))
-                .map(|line| vertical_reflection_errors(&line.to_owned(), i))
-                .sum::<usize>()
-                == errors
-        })
+        .find(|&i| vertical_reflection_errors(pattern, i) == errors)
         .map(|x| x + 1)
 }
 
