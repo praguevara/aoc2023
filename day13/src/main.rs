@@ -18,13 +18,6 @@ fn parse_pattern(input: &str) -> IResult<&str, Pattern> {
     Ok((input, pattern))
 }
 
-#[test]
-fn test_parse_pattern() {
-    let input = "#..#..##.#.\r\n#..#..##.#.\r\n\r\n";
-
-    parse_pattern(input).unwrap();
-}
-
 fn parse_input(input: &str) -> IResult<&str, Vec<Pattern>> {
     let (input, patterns) = separated_list1(line_ending, parse_pattern)(input)?;
 
@@ -38,138 +31,97 @@ fn test_parse_input() {
     assert_eq!(patterns.len(), 2);
 }
 
-// ##..## -> len(6)
-
-fn has_vertical_reflection(pattern_line: &Vec<bool>, reflects_after: usize) -> bool {
-    // dbg!(reflects_after);
+fn vertical_reflection_errors(pattern_line: &Vec<bool>, reflects_after: usize) -> usize {
     debug_assert!(reflects_after < pattern_line.len() - 1);
 
+    let mut errors = 0;
     let max_reflection_len =
         usize::min(reflects_after + 1, pattern_line.len() - 1 - reflects_after);
-    // dbg!(max_reflection_len);
 
     for i in 0..max_reflection_len {
         let left_idx = reflects_after - i;
         let right_idx = reflects_after + i + 1;
 
-        // dbg!(left_idx, right_idx);
-
         let (left, right) = (pattern_line[left_idx], pattern_line[right_idx]);
         if left != right {
-            return false;
+            errors += 1;
         }
     }
-    true
+    errors
 }
 
 #[test]
 fn test_has_vertical_reflection() {
     let pattern = vec![vec![true, true, false, false, true, true]];
-    assert!(has_vertical_reflection(&pattern[0], 0));
-    assert!(!has_vertical_reflection(&pattern[0], 1));
-    assert!(has_vertical_reflection(&pattern[0], 2));
-    assert!(!has_vertical_reflection(&pattern[0], 3));
-    assert!(has_vertical_reflection(&pattern[0], 4));
+    assert_eq!(vertical_reflection_errors(&pattern[0], 2), 0);
 }
 
-fn find_vertical_reflection(pattern: &Pattern) -> Option<usize> {
-    (0..pattern[0].len() - 1).find(|&i| pattern.iter().all(|line| has_vertical_reflection(line, i)))
+fn find_vertical_reflection(pattern: &Pattern, errors: usize) -> Option<usize> {
+    (0..pattern[0].len() - 1)
+        .find(|&i| {
+            pattern
+                .iter()
+                .map(|line| vertical_reflection_errors(line, i))
+                .sum::<usize>()
+                == errors
+        })
+        .map(|x| x + 1)
 }
 
-#[test]
-fn test_find_vertical_reflection() {
-    /*
-       #.##..##.
-       ..#.##.#.
-       ##......#
-       ##......#
-       ..#.##.#.
-       ..##..##.
-       #.#.##.#.
-    */
-
-    let pattern = vec![
-        vec![true, false, true, true, false, false, true, true, false],
-        vec![false, false, true, false, true, true, false, true, false],
-        vec![true, true, false, false, false, false, false, false, true],
-        vec![true, true, false, false, false, false, false, false, true],
-        vec![false, false, true, false, true, true, false, true, false],
-        vec![false, false, true, true, false, false, true, true, false],
-        vec![true, false, true, false, true, true, false, true, false],
-    ];
-
-    assert_eq!(find_vertical_reflection(&pattern), Some(4));
-}
-
-fn has_horizontal_reflection(pattern: &Pattern, reflects_after: usize) -> bool {
+fn horizontal_reflection_errors(pattern: &Pattern, reflects_after: usize) -> usize {
     debug_assert!(reflects_after < pattern.len() - 1);
 
+    let mut errors = 0;
     let max_reflection_len = usize::min(reflects_after + 1, pattern.len() - 1 - reflects_after);
 
     for i in 0..max_reflection_len {
         let top_idx = reflects_after - i;
         let bottom_idx = reflects_after + i + 1;
 
-        if pattern[top_idx] != pattern[bottom_idx] {
-            return false;
+        for (a, b) in pattern[top_idx].iter().zip(pattern[bottom_idx].iter()) {
+            if a != b {
+                errors += 1;
+            }
         }
     }
-    true
+    errors
 }
 
-#[test]
-fn test_has_horizontal_reflection() {
-    // #...##..#
-    // #....#..#
-    // ..##..###
-    // #####.##.
-    // #####.##.
-    // ..##..###
-    // #....#..#
-
-    let pattern = vec![
-        vec![true, false, false, false, true, true, false, false, true],
-        vec![true, false, false, false, false, true, false, false, true],
-        vec![false, false, true, true, false, false, true, true, true],
-        vec![true, true, true, true, true, true, false, true, true],
-        vec![true, true, true, true, true, true, false, true, true],
-        vec![false, false, true, true, false, false, true, true, true],
-        vec![true, false, false, false, false, true, false, false, true],
-    ];
-
-    assert!(!has_horizontal_reflection(&pattern, 0));
-    assert!(!has_horizontal_reflection(&pattern, 1));
-    assert!(!has_horizontal_reflection(&pattern, 2));
-    assert!(has_horizontal_reflection(&pattern, 3));
-    assert!(!has_horizontal_reflection(&pattern, 4));
-    assert!(!has_horizontal_reflection(&pattern, 5));
+fn find_horizontal_reflection(pattern: &Pattern, errors: usize) -> Option<usize> {
+    (0..pattern.len() - 1)
+        .find(|&i| horizontal_reflection_errors(pattern, i) == errors)
+        .map(|x| x + 1)
 }
 
-fn find_horizontal_reflection(pattern: &Pattern) -> Option<usize> {
-    (0..pattern.len() - 1).find(|&i| has_horizontal_reflection(pattern, i))
+fn find_reflection(pattern: &Pattern, errors: usize) -> (Option<usize>, Option<usize>) {
+    let v = find_vertical_reflection(pattern, errors);
+    if v.is_some() {
+        (v, None)
+    } else {
+        (None, find_horizontal_reflection(pattern, errors))
+    }
 }
 
-#[test]
-fn test_find_horizontal_reflection() {
-    // #...##..#
-    // #....#..#
-    // ..##..###
-    // #####.##.
-    // #####.##.
-    // ..##..###
-    // #....#..#
+fn summarize_reflections(
+    reflections: impl Iterator<Item = (Option<usize>, Option<usize>)>,
+) -> usize {
+    reflections
+        .map(|(x, y)| match (x, y) {
+            (_, Some(y)) => 100 * y,
+            (Some(x), _) => x,
+            _ => panic!("No reflection found"),
+        })
+        .sum::<usize>()
+}
 
-    let pattern = vec![
-        vec![true, false, false, false, true, true, false, false, true],
-        vec![true, false, false, false, false, true, false, false, true],
-        vec![false, false, true, true, false, false, true, true, true],
-        vec![true, true, true, true, true, true, false, true, true],
-        vec![true, true, true, true, true, true, false, true, true],
-        vec![false, false, true, true, false, false, true, true, true],
-        vec![true, false, false, false, false, true, false, false, true],
-    ];
+fn part_1(patterns: &[Pattern]) -> usize {
+    let reflections = patterns.iter().map(|p| find_reflection(p, 0));
+    summarize_reflections(reflections)
+}
 
-    assert_eq!(find_horizontal_reflection(&pattern), Some(3));
+fn part_2(patterns: &[Pattern]) -> usize {
+    let reflections = patterns.iter().map(|p| find_reflection(p, 1));
+    summarize_reflections(reflections)
 }
 
 fn main() {
@@ -177,18 +129,9 @@ fn main() {
 
     let patterns = parse_input(input).unwrap().1;
 
-    dbg!(&patterns.len());
+    let part_1_answer = part_1(&patterns);
+    println!("{}", part_1_answer);
 
-    let reflections = patterns.iter().map(|pattern| {
-        (
-            find_vertical_reflection(pattern).map(|x| x + 1),
-            find_horizontal_reflection(pattern).map(|x| x + 1),
-        )
-    });
-
-    let part_1 = reflections
-        .map(|(x, y)| x.unwrap_or_default() + 100 * y.unwrap_or_default())
-        .sum::<usize>();
-
-    dbg!(part_1);
+    let part_2_answer = part_2(&patterns);
+    println!("{}", part_2_answer);
 }
