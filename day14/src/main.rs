@@ -76,13 +76,6 @@ fn tilt_grid(grid: &mut Grid, direction: Direction) {
     }
 }
 
-fn tilt_grid_cycle(grid: &mut Grid) {
-    tilt_grid(grid, Direction::North);
-    tilt_grid(grid, Direction::West);
-    tilt_grid(grid, Direction::South);
-    tilt_grid(grid, Direction::East);
-}
-
 #[test]
 fn test_tilt_grid() {
     let grid_str = include_str!("../sample.txt");
@@ -95,6 +88,13 @@ fn test_tilt_grid() {
     assert_eq!(grid, target_grid);
 }
 
+fn tilt_grid_cycle(grid: &mut Grid) {
+    tilt_grid(grid, Direction::North);
+    tilt_grid(grid, Direction::West);
+    tilt_grid(grid, Direction::South);
+    tilt_grid(grid, Direction::East);
+}
+
 #[test]
 fn test_tilt_grid_cycle() {
     let grid_str = include_str!("../sample.txt");
@@ -105,6 +105,25 @@ fn test_tilt_grid_cycle() {
 
     tilt_grid_cycle(&mut grid);
     assert_eq!(grid, target_grid);
+}
+
+fn cycles_cached(grid: Grid, iterations: usize) -> Grid {
+    let mut cache = std::collections::HashMap::<Grid, usize>::new();
+    let mut grid = grid.clone();
+    for i in 0..iterations {
+        if let Some(j) = cache.get(&grid) {
+            let cycle_length = i - j;
+            let remaining_iterations = (iterations - i) % cycle_length;
+            for _ in 0..remaining_iterations {
+                tilt_grid_cycle(&mut grid);
+            }
+            break;
+        } else {
+            cache.insert(grid.clone(), i);
+            tilt_grid_cycle(&mut grid);
+        }
+    }
+    grid
 }
 
 fn compute_total_load(grid: &Grid) -> usize {
@@ -131,12 +150,10 @@ fn main() {
     tilt_grid(&mut grid, Direction::North);
     println!("Total load: {}", compute_total_load(&grid));
 
-    let mut grid = parse_grid(input);
-    for _ in 0..1000 {
-        tilt_grid_cycle(&mut grid);
-    }
+    let grid = parse_grid(input);
+    let grid = cycles_cached(grid, 1_000_000_000);
     println!(
-        "Total load after 1000000000 cycles: {}",
+        "Total load after 1_000_000_000 cycles: {}",
         compute_total_load(&grid)
     );
 }
