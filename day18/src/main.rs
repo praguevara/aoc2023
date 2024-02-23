@@ -1,12 +1,9 @@
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    ops::{Add, Div},
-};
+use std::ops::{Add, Div};
 
 use nom::{
     bytes::complete::{tag, take_while_m_n},
     character::complete::{anychar, digit1, space1},
-    combinator::map_res,
+    combinator::{map, map_res},
     sequence::Tuple,
     IResult,
 };
@@ -58,11 +55,73 @@ fn parse_instruction(input: &str) -> IResult<&str, Instruction> {
     Ok((input, instruction))
 }
 
+fn parse_hex_five_digits(input: &str) -> IResult<&str, usize> {
+    let (input, _) = tag("#")(input)?;
+    nom::Parser::parse(
+        &mut map_res(take_while_m_n(5, 5, is_hex_digit), |s: &str| {
+            usize::from_str_radix(s, 16)
+        }),
+        input,
+    )
+}
+
+fn parse_direction_from_hex(input: &str) -> IResult<&str, char> {
+    // 0 means R
+    // 1 means D
+    // 2 means L
+    // 3 means U
+
+    let (input, direction) = map(
+        nom::branch::alt((tag("0"), tag("1"), tag("2"), tag("3"))),
+        |s: &str| match s {
+            "0" => 'R',
+            "1" => 'D',
+            "2" => 'L',
+            "3" => 'U',
+            _ => unreachable!(),
+        },
+    )(input)?;
+
+    Ok((input, direction))
+}
+
+fn parse_instruction_second_part(input: &str) -> IResult<&str, Instruction> {
+    let (input, _) = anychar(input)?;
+    let (input, _) = space1(input)?;
+    let (input, _) = digit1(input)?;
+    let (input, _) = space1(input)?;
+    let (input, _) = tag("(")(input)?;
+
+    let (input, distance) = parse_hex_five_digits(input)?;
+    let (input, direction) = parse_direction_from_hex(input)?;
+
+    let (input, _) = tag(")")(input)?;
+
+    let instruction = Instruction {
+        direction,
+        distance: distance as i32,
+        color: (0, 0, 0),
+    };
+
+    Ok((input, instruction))
+}
+
 fn parse_input(input_str: &str) -> Result<Vec<Instruction>, nom::Err<nom::error::Error<&str>>> {
     let lines = input_str.lines();
 
     let instructions: Result<Vec<_>, _> = lines
         .map(|line| parse_instruction(line).map(|i| i.1))
+        .collect();
+    instructions
+}
+
+fn parse_input_second_part(
+    input_str: &str,
+) -> Result<Vec<Instruction>, nom::Err<nom::error::Error<&str>>> {
+    let lines = input_str.lines();
+
+    let instructions: Result<Vec<_>, _> = lines
+        .map(|line| parse_instruction_second_part(line).map(|i| i.1))
         .collect();
     instructions
 }
@@ -120,6 +179,15 @@ fn main() {
     let input_str = include_str!("../input.txt");
     let instructions = parse_input(input_str).unwrap();
     // dbg!(&instructions);
+
+    let holes_dug = run_instructions(instructions);
+    let mut points: Vec<Coord> = holes_dug.clone();
+    points.push(holes_dug[0]);
+    let holes = shoelace_formula(&points);
+    println!("Number of holes dug: {}", holes);
+
+    // part 2
+    let instructions = parse_input_second_part(input_str).unwrap();
 
     let holes_dug = run_instructions(instructions);
     let mut points: Vec<Coord> = holes_dug.clone();
