@@ -73,6 +73,47 @@ fn solve(grid: &[Box<[i32]>]) -> (Vec<(i32, i32)>, i32) {
         cells
     };
 
+    let next_path_cells_2 = |path_info: &PathInfo, cells: &[(i32, i32)]| {
+        // can't have more than 10 sequential cells
+        // can't get out of bounds
+        // can't backtrack
+        // can't turn before 4 sequential cells
+
+        let (x, y) = cells.last().unwrap();
+        let mut cells = [Option::None; 4];
+
+        if !(*y == 0
+            || (path_info.sequential == 10 && path_info.direction == Direction::Up)
+            || (path_info.sequential < 4 && path_info.direction != Direction::Up)
+            || path_info.direction == Direction::Down)
+        {
+            cells[0] = Some(((*x, y - 1), Direction::Up));
+        }
+        if !(*y == grid.len() as i32 - 1
+            || (path_info.sequential == 10 && path_info.direction == Direction::Down)
+            || (path_info.sequential < 4 && path_info.direction != Direction::Down)
+            || path_info.direction == Direction::Up)
+        {
+            cells[1] = Some(((*x, y + 1), Direction::Down));
+        }
+        if !(*x == 0
+            || (path_info.sequential == 10 && path_info.direction == Direction::Left)
+            || (path_info.sequential < 4 && path_info.direction != Direction::Left)
+            || path_info.direction == Direction::Right)
+        {
+            cells[2] = Some(((*x - 1, *y), Direction::Left));
+        }
+        if !(*x == grid[0].len() as i32 - 1
+            || (path_info.sequential == 10 && path_info.direction == Direction::Right)
+            || (path_info.sequential < 4 && path_info.direction != Direction::Right)
+            || path_info.direction == Direction::Left)
+        {
+            cells[3] = Some(((*x + 1, *y), Direction::Right));
+        }
+
+        cells
+    };
+
     let mut stack: Vec<(PathInfo, Vec<(i32, i32)>, i32)> = vec![(
         PathInfo {
             direction: Direction::Right,
@@ -111,7 +152,7 @@ fn solve(grid: &[Box<[i32]>]) -> (Vec<(i32, i32)>, i32) {
             continue;
         }
 
-        for (next_cell, direction) in next_path_cells(&path_info, &cells).into_iter().flatten() {
+        for (next_cell, direction) in next_path_cells_2(&path_info, &cells).into_iter().flatten() {
             let mut next_path = path_info.clone();
             let mut next_cells = cells.clone();
             next_cells.push(next_cell);
