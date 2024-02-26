@@ -92,8 +92,8 @@ fn parse_part(input_line: &str) -> Part {
     part
 }
 
-fn test_part(workflows: &HashMap<String, Workflow>, part: &Part) -> bool {
-    fn test_part_recursive(
+fn part_matches(workflows: &HashMap<String, Workflow>, part: &Part) -> bool {
+    fn part_matches_recursive(
         workflows: &HashMap<String, Workflow>,
         workflow: &Workflow,
         part: &Part,
@@ -120,7 +120,11 @@ fn test_part(workflows: &HashMap<String, Workflow>, part: &Part) -> bool {
                     "A" => return true,
                     "R" => return false,
                     name => {
-                        return test_part_recursive(workflows, workflows.get(name).unwrap(), part);
+                        return part_matches_recursive(
+                            workflows,
+                            workflows.get(name).unwrap(),
+                            part,
+                        );
                     }
                 }
             }
@@ -128,7 +132,7 @@ fn test_part(workflows: &HashMap<String, Workflow>, part: &Part) -> bool {
         panic!("No rule met the condition");
     }
 
-    test_part_recursive(workflows, workflows.get("in").unwrap(), part)
+    part_matches_recursive(workflows, workflows.get("in").unwrap(), part)
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -193,53 +197,34 @@ impl PartRange {
     }
 }
 
-#[test]
-fn test_ranges() {
-    let range = PartRange::new();
-    let (matches, doesnt) = range.bisect_comparator('>', 'x', 2000);
-    dbg!(&matches);
-    dbg!(&doesnt);
-    dbg!(matches.cardinality());
-    dbg!(doesnt.cardinality());
-}
-
 fn part_ranges_cardinality(workflows: &HashMap<String, Workflow>, part_range: PartRange) -> usize {
     fn part_ranges_cardinality_recursive(
         workflows: &HashMap<String, Workflow>,
         workflow: &Workflow,
         mut part_range: PartRange,
     ) -> usize {
+        let cardinality_recursive = |part_range: PartRange, rule: &Rule| match rule.then.as_str() {
+            "A" => part_range.cardinality(),
+            "R" => 0,
+            name => part_ranges_cardinality_recursive(
+                workflows,
+                workflows.get(name).unwrap(),
+                part_range,
+            ),
+        };
+
         let mut cardinality = 0;
         for rule in &workflow.rules {
             if let Some(ref condition) = rule.condition {
-                let (matches, doesnt) = part_range.clone().bisect_comparator(
+                let (matches, doesnt) = part_range.bisect_comparator(
                     condition.operator,
                     condition.field,
                     condition.value,
                 );
-
-                cardinality += match rule.then.as_str() {
-                    "A" => matches.cardinality(),
-                    "R" => 0,
-                    name => part_ranges_cardinality_recursive(
-                        workflows,
-                        workflows.get(name).unwrap(),
-                        matches,
-                    ),
-                };
-
+                cardinality += cardinality_recursive(matches, rule);
                 part_range = doesnt;
             } else {
-                return cardinality
-                    + match rule.then.as_str() {
-                        "A" => part_range.cardinality(),
-                        "R" => 0,
-                        name => part_ranges_cardinality_recursive(
-                            workflows,
-                            workflows.get(name).unwrap(),
-                            part_range,
-                        ),
-                    };
+                return cardinality + cardinality_recursive(part_range, rule);
             }
         }
         cardinality
@@ -268,7 +253,7 @@ fn main() {
     // Part 1
     let part1 = parts
         .iter()
-        .filter(|part| test_part(&workflows, part))
+        .filter(|part| part_matches(&workflows, part))
         .map(|part| part.x + part.m + part.a + part.s)
         .sum::<isize>();
     println!("Part 1: {}", part1);
